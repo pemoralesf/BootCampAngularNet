@@ -1,5 +1,7 @@
 using API.Helpers;
 using Infraestructura.Data;
+using Infraestructura.Data.IRepositorio;
+using Infraestructura.Data.Repositorio;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,6 +19,8 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
                                 options.UseSqlServer(connectionString));
 
 builder.Services.AddAutoMapper(typeof(MappingProfile));
+
+builder.Services.AddScoped<IUnidadTrabajo, UnidadTrabajo>();
 
 
 builder.Services.AddCors();

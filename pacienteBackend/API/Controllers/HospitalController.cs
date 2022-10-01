@@ -1,7 +1,10 @@
+using System.Net;
 using AutoMapper;
 using Core.Dto;
 using Core.Entidades;
 using Infraestructura.Data;
+using Infraestructura.Data.IRepositorio;
+using Infraestructura.Data.Repositorio;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,18 +14,19 @@ namespace API.Controllers
     [ApiController]
     public class HospitalController : ControllerBase
     {
-        private readonly ApplicationDbContext _db;
+        //private readonly ApplicationDbContext _db;
 
         private ResponseDto _response;
         private readonly ILogger<HospitalController> _logger;
         private readonly IMapper _mapper;
+        private readonly IUnidadTrabajo _unidadTrabajo;
 
-        public HospitalController(ApplicationDbContext db, ILogger<HospitalController> logger,
+        public HospitalController(IUnidadTrabajo unidadTrabajo, ILogger<HospitalController> logger,
                                     IMapper mapper)
         {
+            _unidadTrabajo = unidadTrabajo;
             _mapper = mapper;
             _logger = logger;
-            _db = db;
 
             _response = new ResponseDto();
 
@@ -34,10 +38,10 @@ namespace API.Controllers
         public async Task<ActionResult<IEnumerable<Hospital>>> GetHospital()
         {
             _logger.LogInformation("Listado de   Hospitales del  EndPoint");
-            var lista = await _db.TbHospital.ToListAsync();
+            var lista = await _unidadTrabajo.Hospital.ObtenerTodos();
             _response.Resultado = lista;
             _response.Mensaje = "Listado de Hospital";
-
+            _response.StatusCode = HttpStatusCode.OK;
 
             return Ok(_response);
         }
@@ -52,25 +56,28 @@ namespace API.Controllers
 
             if (id == 0)
             {
-                _logger.LogError("Debe d e  enviar  eñ  id del  Hospital");
+                _logger.LogError("Debe de  enviar  el  id del  Hospital");
                 _response.Mensaje = "Debe  de  enviar  el  ID";
                 _response.IsExitoso = false;
+                _response.StatusCode = HttpStatusCode.BadRequest;
                 return BadRequest(_response);
             }
 
 
 
-            var hosp = await _db.TbHospital.FindAsync(id);
+            var hosp = await _unidadTrabajo.Hospital.ObtenerPrimero(c=>c.Id==id);
 
             if (hosp == null)
             {
                 _logger.LogError("Hospital  no  Existe");
                 _response.Mensaje = "El  Hospital  no  existe";
                 _response.IsExitoso = false;
+                _response.StatusCode = HttpStatusCode.NotFound;
                 return NotFound(_response);
             }
             _response.Resultado = hosp;
             _response.Mensaje = "Datos  del  Hospital  " + hosp.Id;
+            _response.StatusCode = HttpStatusCode.OK;
             return Ok(_response);
         }
 
@@ -83,6 +90,7 @@ namespace API.Controllers
             {
                 _response.Mensaje = "Informacion  incorrecta";
                 _response.IsExitoso = false;
+                _response.StatusCode = HttpStatusCode.BadRequest;
                 return BadRequest(_response);
             }
 
@@ -91,20 +99,25 @@ namespace API.Controllers
                 return BadRequest(ModelState);
             }
 
-            var hospitalExiste = await _db.TbHospital.FirstOrDefaultAsync(
-                                    h => h.NombreHospital.ToLower() == hospitalDto.NombreHospital.ToLower());
+            var hospitalExiste = await  _unidadTrabajo.Hospital.ObtenerPrimero(h => h.NombreHospital.ToLower() == hospitalDto.NombreHospital.ToLower());
 
             if (hospitalExiste != null)
             {
-                ModelState.AddModelError("NombreDupliocado", "El nombre del  Hospital ya Existe");
-                return BadRequest(ModelState);
+                //ModelState.AddModelError("NombreDupliocado", "El nombre del  Hospital ya Existe");
+                _response.IsExitoso = false;
+                _response.Mensaje = "El nombre del  Hospital ya Existe";
+                _response.StatusCode = HttpStatusCode.BadRequest;
+                return BadRequest(_response);
             }
 
             Hospital hospital = _mapper.Map<Hospital>(hospitalDto);
 
 
-            await _db.TbHospital.AddAsync(hospital);
-            await _db.SaveChangesAsync();
+            await _unidadTrabajo.Hospital.Agregar(hospital);
+            await _unidadTrabajo.Guardar();
+            _response.IsExitoso=true;
+            _response.Mensaje="Hospital  guardado  con  Exito";
+            _response.StatusCode=HttpStatusCode.Created;
             return CreatedAtRoute("GetHospital", new { id = hospital.Id }, hospital);
 
         }
@@ -118,7 +131,11 @@ namespace API.Controllers
         {
             if (id != hospitalDto.Id)
             {
-                return BadRequest("Id  de Hospital no coincide");
+                _response.IsExitoso=false;
+                _response.Mensaje="Id  de Hospital no coincide";
+                _response.StatusCode = HttpStatusCode.BadRequest;
+                return BadRequest(_response);
+
             }
 
             if (!ModelState.IsValid)
@@ -126,20 +143,25 @@ namespace API.Controllers
                 return BadRequest(ModelState);
             }
 
-            var hospitalExiste = await _db.TbHospital.FirstOrDefaultAsync(
+            var hospitalExiste = await  _unidadTrabajo.Hospital.ObtenerPrimero(
                                 c => c.NombreHospital.ToLower() == hospitalDto.NombreHospital.ToLower()
                                 && c.Id != hospitalDto.Id);
 
             if (hospitalExiste != null)
             {
-                ModelState.AddModelError("NombreDuplicado", "Nombre  del Hospitalk ya  Existe");
-                return BadRequest(ModelState);
+                //ModelState.AddModelError("NombreDuplicado", "Nombre  del Hospitalk ya  Existe");
+                _response.IsExitoso=false;
+                _response.Mensaje="Nombre del Hospital ya  existe";
+                return BadRequest(_response);
             }
 
             Hospital hospital = _mapper.Map<Hospital>(hospitalDto);
-            _db.Update(hospital);
-            await _db.SaveChangesAsync();
-            return Ok(hospital);
+           _unidadTrabajo.Hospital.Actualizar(hospital);
+            await _unidadTrabajo.Guardar();
+            _response.IsExitoso=true;
+            _response.Mensaje="Hospital  Actualizado";
+            _response.StatusCode=HttpStatusCode.OK;
+            return Ok(_response);
 
         }
 
@@ -150,14 +172,20 @@ namespace API.Controllers
 
         public async Task<ActionResult> DeleteHospital(int id)
         {
-            var hospital = await _db.TbHospital.FindAsync(id);
+            var hospital = await _unidadTrabajo.Hospital.ObtenerPrimero(c=>c.Id==id);
             if (hospital == null)
             {
-                return NotFound();
+                _response.IsExitoso=false;
+                _response.Mensaje="Hospital No existe";
+                _response.StatusCode=HttpStatusCode.NotFound;
+                return NotFound(_response);
             }
-            _db.TbHospital.Remove(hospital);
-            await _db.SaveChangesAsync();
-            return NoContent();
+           _unidadTrabajo.Hospital.Remover(hospital);
+            await _unidadTrabajo.Guardar();
+            _response.IsExitoso=true;
+            _response.Mensaje="Hospital  Eliminado";
+            _response.StatusCode=HttpStatusCode.NoContent;
+            return Ok(_response);
 
         }
 
