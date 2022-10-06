@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using Core.Especificaciones;
 using Infraestructura.Data.Repositorio.IRepositorio;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,6 +20,15 @@ namespace Infraestructura.Data.Repositorio
         {
             await dbSet.AddAsync(entidad);
         }
+
+/*
+         Task<IEnumerable<T>> ObtenerTodosPaginado(
+           Parametros parametros, 
+           Expression<Func<T, bool>> filtro = null,
+           Func<IQueryable<T>, IOrderedQueryable<T>> orderBy = null,
+           string incluirPropiedades = null  
+        );
+  */ 
 
         public  async Task<T> ObtenerPrimero(Expression<Func<T, bool>> filtro = null, string incluirPropiedades = null)
         {
@@ -65,6 +75,31 @@ namespace Infraestructura.Data.Repositorio
         public void Remover(T entidad)
         {
             dbSet.Remove(entidad);
+        }
+
+        public async Task<PagedList<T>> ObtenerTodosPaginado(Parametros parametros, 
+        Expression<Func<T, bool>> filtro = null, Func<IQueryable<T>, 
+        IQueryable<T>> orderBy = null, string incluirPropiedades = null)
+        {
+            IQueryable<T>  query = dbSet;
+            if (filtro != null)
+            {
+                query = query.Where(filtro);
+            }
+
+            if(incluirPropiedades != null)
+            {
+                foreach (var ip in incluirPropiedades.Split(new char[] {','}, StringSplitOptions.RemoveEmptyEntries ))
+                {
+                    query = query.Include(ip);
+                }
+            }
+            if(orderBy != null)
+            {
+                 await orderBy(query).ToListAsync();
+                 return PagedList<T>.ToPagedList(query, parametros.PageNumber, parametros.PageSize );
+            }
+             return PagedList<T>.ToPagedList(query, parametros.PageNumber, parametros.PageSize );
         }
     }
 }

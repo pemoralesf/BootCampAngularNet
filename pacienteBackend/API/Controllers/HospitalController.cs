@@ -14,9 +14,10 @@ namespace API.Controllers
     [ApiController]
     public class HospitalController : ControllerBase
     {
-        //private readonly ApplicationDbContext _db;
-
+      
         private ResponseDto _response;
+
+        private ResponsePaginadorDto _responsePaginador;
         private readonly ILogger<HospitalController> _logger;
         private readonly IMapper _mapper;
         private readonly IUnidadTrabajo _unidadTrabajo;
@@ -27,8 +28,8 @@ namespace API.Controllers
             _unidadTrabajo = unidadTrabajo;
             _mapper = mapper;
             _logger = logger;
-
             _response = new ResponseDto();
+            _responsePaginador = new ResponsePaginadorDto();
 
         }
 

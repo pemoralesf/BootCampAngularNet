@@ -2,6 +2,7 @@ using System.Net;
 using AutoMapper;
 using Core.Dto;
 using Core.Entidades;
+using Core.Especificaciones;
 using Infraestructura.Data;
 using Infraestructura.Data.IRepositorio;
 using Microsoft.AspNetCore.Mvc;
@@ -16,6 +17,8 @@ namespace API.Controllers
 
 
         private ResponseDto _response;
+
+        private ResponsePaginadorDto _ResponsePaginador;
         private readonly ILogger<PacienteController> _logger;
         private readonly IMapper _mapper;
         private readonly IUnidadTrabajo _unidadTrabajo;
@@ -26,24 +29,33 @@ namespace API.Controllers
             _unidadTrabajo = unidadTrabajo;
             _mapper = mapper;
             _logger = logger;
-
             _response = new ResponseDto();
+            _ResponsePaginador = new ResponsePaginadorDto();
 
         }
 
         [HttpGet]
 
         [ProducesResponseType(StatusCodes.Status200OK)]
-        public async Task<ActionResult<IEnumerable<PacienteReadyDto>>> GetPaciente()
+        public async Task<ActionResult<IEnumerable<PacienteReadyDto>>> GetPaciente(
+            [FromQuery] Parametros parametros  
+        )
         {
             _logger.LogInformation("Listado de  Pacientes del  EndPoint");
-            var lista = await  _unidadTrabajo.Paciente.ObtenerTodos(incluirPropiedades: "Hospital");
+            var lista = await  _unidadTrabajo.Paciente.ObtenerTodosPaginado(
+                                                        parametros,
+                                                       incluirPropiedades: "Hospital",
+                                                       orderBy: p=>p.OrderBy(p=>p.Apellidos)
+                                                       .ThenBy(p=>p.Nombres));
+            
+            _ResponsePaginador.TotalPaginas = lista.MetaData.TotalPages;
+            _ResponsePaginador.TotalRegistros = lista.MetaData.TotalCount;
+            _ResponsePaginador.PageSize = lista.MetaData.PageSize;
+            _ResponsePaginador.Resultado = _mapper.Map<IEnumerable<Paciente>, IEnumerable<PacienteReadyDto>>(lista);
+            _ResponsePaginador.Mensaje = "Listado de Pacientes";
+            _ResponsePaginador.StatusCode = HttpStatusCode.OK;
 
-            _response.Resultado = _mapper.Map<IEnumerable<Paciente>, IEnumerable<PacienteReadyDto>>(lista);
-            _response.Mensaje = "Listado de Pacientes";
-            _response.StatusCode = HttpStatusCode.OK;
-
-            return Ok(_response);
+            return Ok(_ResponsePaginador);
         }
 
         [HttpGet("{id}", Name = "GetPaciente")]
